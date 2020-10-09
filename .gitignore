@@ -2,12 +2,14 @@
 
 # Since ROM distribution is illegal, you should
 # populate the directory with you own legal copies.
+# roms/RESOURCES.md contains a list of good resources
+# that could help.
 /roms/*
+!/roms/RESOURCES.md
 
 # Documentation regarding Atari's internals are quite
-# widespread, however I don't want to distribute them
-# through here. You can find them at 
-# http://archive.6502.org/datasheets/rockwell_r650x_r651x.pdf
-# and
-# https://en.wikipedia.org/wiki/Atari_2600_hardware
+# widespread, however I don't want to distribute them here.
+# ataridocs/RESOURCES.md contains a list of good resources
+# that could help.
 /ataridocs/*
+!/ataridocs/RESOURCES.md
