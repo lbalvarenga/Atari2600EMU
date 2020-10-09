@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atari2600EMU</title>
+
+    <link rel="shortcut icon" href="meta/favicon.png" type="image/x-icon">
+</head>
+
+<body>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 1.4em;
+            color: #e2e2e2;
+            background-color: rgb(37, 37, 37);
+        }
+
+        .hex-value {
+            color: #dfdfbe;
+        }
+
+        .hex-value-index {
+            color: #e2e2e2;
+        }
+
+        .hex-value-implied {
+            color: #ffff9f;
+        }
+
+        .hex-value-relative {
+            color: #a2f185;
+        }
+
+        .instruction {
+            color: #f16980;
+        }
+
+        .register {
+            color: #6affdf;
+        }
+
+        #disasm-container {
+            overflow-y: scroll;
+            max-height: 60vh;
+        }
+    </style>
+
+    <div style="margin: 15px; padding-bottom: 25px;">
+        <span style="float: left; margin: 10px;"><img src="./meta/favicon.png" width=64 height=64></span>
+        <h1>Atari2600EMU</h1>
+    </div>
+
+    <div id="disasm-container">
+        <p id="disasm-out"></p>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+
+</html>
