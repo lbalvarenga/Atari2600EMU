@@ -26,6 +26,7 @@ class CPU {
     write(addr, data) {}
 
     clock() {}
+    fetch() {}
     reset() {}
 
     getFlag() {}

@@ -110,6 +110,13 @@ class CPU_6502 extends CPU {
         this.cycles--;
     }
 
+    fetch() {
+        if (!(this.op.mode == "IMP")) {
+            this.fetched = this.read(this.addr_abs);
+        }
+        return this.fetched;
+    }
+
     reset() {
 
     }
@@ -124,6 +131,7 @@ class CPU_6502 extends CPU {
     setFlag(flagName, value) {
         let flag = this.flags[flagName];
         flag.value = value;
+
         // Update status register
         if (value) {
             this.reg["status"].value |= (flag.value << flag.key);
@@ -236,48 +244,198 @@ class CPU_6502 extends CPU {
         switch (this.op.name) {
             case "ADC":
                 break;
+
             case "AND":
+                this.fetch(); // Gets contents of whats at addr_abs
+                this.reg["A"] = this.reg["A"] & this.fetched;
+
+                this.setFlag("Z", this.reg["A"] == 0x00);
+                this.setFlag("N", this.reg["A"] == 0x80);
+
+                extraCycles = 1;
                 break;
+
             case "ASL":
+                this.fetch(); // If mode is IMP we'll get the accumulator
+                let shifted = this.fetched << 1;
+
+                this.setFlag("C", (shifted & 0xFF00) > 0);
+                this.setFlag("Z", (shifted & 0x00FF) == 0x00);
+                this.setFlag("N", shifted & 0x80);
+
+                if (this.op.mode == "IMP") this.reg["A"] = shifted & 0x00FF;
+                else this.write(this.addr_abs, shifted & 0x00FF);
+
                 break;
+
             case "BCC":
+                if (!(this.getFlag("C"))) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "BCS":
+                if (this.getFlag("C")) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "BEQ":
+                if (this.getFlag("Z")) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "BIT":
                 break;
+
             case "BMI":
+                if (this.getFlag("N")) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "BNE":
+                if (!(this.getFlag("Z"))) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
+
                 break;
+
             case "BPL":
+                if (!(this.getFlag("N"))) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "BRK":
                 break;
+
             case "BVC":
+                if (!(this.getFlag("V"))) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "BVS":
+                if (this.getFlag("V")) {
+                    this.cycles++;
+                    this.addr_abs = this.pc + this.addr_rel;
+
+                    // Page boundary check
+                    if ((this.addr_abs & 0xFF00) != (this.pc & 0xFF00)) {
+                        this.cycles++;
+                    }
+
+                    this.pc = this.addr_abs;
+                }
                 break;
+
             case "CLC":
+                this.setFlag("C", false);
                 break;
+
             case "CLD":
+                this.setFlag("D", false);
                 break;
+
             case "CLI":
+                this.setFlag("I", false);
                 break;
+
             case "CLV":
+                this.setFlag("V", false);
                 break;
+
             case "CMP":
+                this.fetch();
+
+                this.setFlag("Z", ((this.reg["A"] - this.fetched) & 0x00FF) == 0x0000);
+                this.setFlag("C", this.fetched <  this.reg["A"]);
+                this.setFlag("N", (this.reg["A"] - this.fetched) & 0x0080);
+
+                extraCycles = 1;
                 break;
+
             case "CPX":
+                this.fetch();
+
+                this.setFlag("Z", ((this.reg["X"] - this.fetched) & 0x00FF) == 0x0000);
+                this.setFlag("C", this.fetched <  this.reg["X"]);
+                this.setFlag("N", (this.reg["X"] - this.fetched) & 0x0080);
+
+                extraCycles = 1;
                 break;
+
             case "CPY":
+                this.fetch();
+
+                this.setFlag("Z", ((this.reg["Y"] - this.fetched) & 0x00FF) == 0x0000);
+                this.setFlag("C", this.fetched <  this.reg["Y"]);
+                this.setFlag("N", (this.reg["Y"] - this.fetched) & 0x0080);
+
+                extraCycles = 1;
                 break;
+
             case "DEC":
                 break;
-            case "DEC":
-                break;
+                
             case "DEY":
                 break;
             case "EOR":
@@ -300,8 +458,12 @@ class CPU_6502 extends CPU {
                 break;
             case "LSR":
                 break;
+
             case "NOP":
+                // NOPs can be different depending on the opcode
+                // for now, they don't add any cycles, but that's inaccurate.
                 break;
+
             case "ORA":
                 break;
             case "PHA":
@@ -323,9 +485,17 @@ class CPU_6502 extends CPU {
             case "SBC":
                 break;
             case "SEC":
+                this.setFlag("C", true);
                 break;
+
+            case "SED":
+                this.setFlag("D", true);
+                break;
+
             case "SEI":
+                this.setFlag("I", true);
                 break;
+
             case "STA":
                 break;
             case "STX":
@@ -345,6 +515,8 @@ class CPU_6502 extends CPU {
             case "TYA":
                 break;
         }
+
+        return extraCycles;
     }
 
     getInfo() {
