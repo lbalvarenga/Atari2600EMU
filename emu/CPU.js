@@ -9,15 +9,30 @@ class CPU {
 
     bus;
 
-    flags = [];    // Flags array
+    flags = [];    // Flags object array
 
-    r    = [];     // Register array + Status register
+    reg  = [];     // Registers object array + Status register
     stkp = 0x00;   // Stack pointer
     pc   = 0x0000; // Program counter
     clockSpeed;
+    fetched = 0x00;
+
+    addr_abs = 0x0000;
+    addr_rel = 0x00;
+    op       = [];
+    cycles   = 0;
 
     read(addr) {}
     write(addr, data) {}
+
+    clock() {}
+    reset() {}
+
+    getFlag() {}
+    setFlag() {}
+    handleAddrMode() {}
+    handleOp() {}
+
     getInfo() {}
     disassemble(start, stop, prettify) {}
 }
