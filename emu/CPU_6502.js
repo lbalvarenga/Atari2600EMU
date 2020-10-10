@@ -85,6 +85,10 @@ class CPU_6502 extends CPU {
         };
     }
 
+    // Processor-specific constants
+    ADDR_STACK_BASE   = 0x0100;
+    ADDR_RESET_LOOKUP = 0xFFFC;
+
     read(addr) {
         return this.bus.read(addr);
     }
@@ -118,9 +122,27 @@ class CPU_6502 extends CPU {
     }
 
     reset() {
+        for (const regName in this.reg) {
+            let register = this.reg[regName]
+            if (register) {
+                register.value = 0;
+            }
+        }
 
+        // Gets program counter address
+        this.addr_abs = this.ADDR_RESET_LOOKUP;
+        let lo = this.read(this.addr_abs);
+        let hi = this.read(this.addr_abs + 1);
+        this.pc = (hi << 8) | lo;
+
+        this.addr_rel = 0x00;
+        this.addr_abs = 0x0000;
+        this.fetched = 0x00;
+
+        this.cycles = 8;
     }
 
+    // TODO: implement interrupts (nmi and irq)
 
     getFlag(flagName) {
         let flag = this.flags[flagName];
@@ -152,11 +174,11 @@ class CPU_6502 extends CPU {
 
         switch (this.op.mode) {
             case "IMP":
-                fetched = this.reg["A"];
+                this.fetched = this.reg["A"].value;
                 break;
 
             case "IMM":
-                this.addr_abs = this.pc++;
+                this.addr_abs = this.pc++; // i'm not sure I understand the ++ tbh
                 break;
 
             case "ZP0":
@@ -166,13 +188,13 @@ class CPU_6502 extends CPU {
                 break;
 
             case "ZPX":
-                this.addr_abs = this.read(this.pc) + this.reg["X"];
+                this.addr_abs = this.read(this.pc) + this.reg["X"].value;
                 this.pc++;
                 this.addr_abs &= 0x00FF;
                 break;
 
             case "ZPY":
-                this.addr_abs = this.read(this.pc) + this.reg["Y"];
+                this.addr_abs = this.read(this.pc) + this.reg["Y"].value;
                 this.pc++;
                 this.addr_abs &= 0x00FF;
                 break;
@@ -187,7 +209,7 @@ class CPU_6502 extends CPU {
                 lo = this.read(this.pc); this.pc++;
                 hi = this.read(this.pc); this.pc++;
                 this.addr_abs = (hi << 8) | lo;
-                this.addr_abs += this.reg[1];
+                this.addr_abs += this.reg["X"].value;
 
                 if ((this.addr_abs & 0xFF00) != (hi << 8)) extraCycles = 1;
                 break;
@@ -196,7 +218,7 @@ class CPU_6502 extends CPU {
                 lo = this.read(this.pc); this.pc++;
                 hi = this.read(this.pc); this.pc++;
                 this.addr_abs = (hi << 8) | lo;
-                this.addr_abs += this.reg[2];
+                this.addr_abs += this.reg["Y"].value;
 
                 if ((this.addr_abs & 0xFF00) != (hi << 8)) extraCycles = 1;
                 break;
@@ -223,9 +245,9 @@ class CPU_6502 extends CPU {
             case "REL":
                 this.addr_rel = this.read(this.pc); this.pc++;
 
-                // Make addr_rel signed
+                // Make addr_rel signed (not working)
                 if (this.addr_rel & 0x80) {
-                    this.addr_rel |= 0xFF00;
+                    // this.addr_rel |= 0xFF00;
                 }
                 break;
 
@@ -240,32 +262,43 @@ class CPU_6502 extends CPU {
     // Most of them are quite trivial though.
     handleOp() {
         let extraCycles = 0;
+        let res, val, shifted;
 
+        // TODO: implement BRK
         switch (this.op.name) {
             case "ADC":
+                this.fetch();
+                res = this.reg["A"].value + this.fetched + this.getFlag("C");
+                this.setFlag("C", res > 255);
+                this.setFlag("Z", !(res & 0x00FF));
+                this.setFlag("N", res & 0x80);
+
+                // For more information regarding overflow:
+                // https://youtu.be/8XmxKPJDGU0?t=2842
+                this.setFlag("V", ((this.reg["A"].value ^ res) & ~(this.reg["A"].value ^ this.fetched)) & 0x0080);
+                this.reg["A"].value = res & 0x00FF;
                 break;
 
             case "AND":
                 this.fetch(); // Gets contents of whats at addr_abs
-                this.reg["A"] = this.reg["A"] & this.fetched;
+                this.reg["A"].value = this.reg["A"].value & this.fetched;
 
-                this.setFlag("Z", this.reg["A"] == 0x00);
-                this.setFlag("N", this.reg["A"] == 0x80);
+                this.setFlag("Z", !(this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
 
                 extraCycles = 1;
                 break;
 
             case "ASL":
                 this.fetch(); // If mode is IMP we'll get the accumulator
-                let shifted = this.fetched << 1;
+                shifted = this.fetched << 1;
 
                 this.setFlag("C", (shifted & 0xFF00) > 0);
-                this.setFlag("Z", (shifted & 0x00FF) == 0x00);
+                this.setFlag("Z", !(shifted & 0x00FF));
                 this.setFlag("N", shifted & 0x80);
 
-                if (this.op.mode == "IMP") this.reg["A"] = shifted & 0x00FF;
+                if (this.op.mode == "IMP") this.reg["A"].value = shifted & 0x00FF;
                 else this.write(this.addr_abs, shifted & 0x00FF);
-
                 break;
 
             case "BCC":
@@ -311,6 +344,11 @@ class CPU_6502 extends CPU {
                 break;
 
             case "BIT":
+                this.fetch();
+                let res = this.reg["A"].value & this.fetched;
+                this.setFlag("Z", !(res & 0x00FF));
+                this.setFlag("V", res & (1 << 7));
+                this.setFlag("N", res & (1 << 6));
                 break;
 
             case "BMI":
@@ -327,6 +365,7 @@ class CPU_6502 extends CPU {
                 }
                 break;
 
+            // Temporary relative address fix (not sure if correct)
             case "BNE":
                 if (!(this.getFlag("Z"))) {
                     this.cycles++;
@@ -337,9 +376,9 @@ class CPU_6502 extends CPU {
                         this.cycles++;
                     }
 
-                    this.pc = this.addr_abs;
+                    this.pc = this.addr_abs & 0x00FF;
                 }
-
+                debugger;
                 break;
 
             case "BPL":
@@ -406,9 +445,9 @@ class CPU_6502 extends CPU {
             case "CMP":
                 this.fetch();
 
-                this.setFlag("Z", ((this.reg["A"] - this.fetched) & 0x00FF) == 0x0000);
-                this.setFlag("C", this.fetched <  this.reg["A"]);
-                this.setFlag("N", (this.reg["A"] - this.fetched) & 0x0080);
+                this.setFlag("C", this.fetched <  this.reg["A"].value);
+                this.setFlag("Z", ((this.reg["A"].value - this.fetched) & 0x00FF) == 0x0000);
+                this.setFlag("N", (this.reg["A"].value - this.fetched) & 0x0080);
 
                 extraCycles = 1;
                 break;
@@ -416,9 +455,9 @@ class CPU_6502 extends CPU {
             case "CPX":
                 this.fetch();
 
-                this.setFlag("Z", ((this.reg["X"] - this.fetched) & 0x00FF) == 0x0000);
-                this.setFlag("C", this.fetched <  this.reg["X"]);
-                this.setFlag("N", (this.reg["X"] - this.fetched) & 0x0080);
+                this.setFlag("C", this.fetched <  this.reg["X"].value);
+                this.setFlag("Z", ((this.reg["X"].value - this.fetched) & 0x00FF) == 0x0000);
+                this.setFlag("N", (this.reg["X"].value - this.fetched) & 0x0080);
 
                 extraCycles = 1;
                 break;
@@ -426,37 +465,129 @@ class CPU_6502 extends CPU {
             case "CPY":
                 this.fetch();
 
-                this.setFlag("Z", ((this.reg["Y"] - this.fetched) & 0x00FF) == 0x0000);
-                this.setFlag("C", this.fetched <  this.reg["Y"]);
-                this.setFlag("N", (this.reg["Y"] - this.fetched) & 0x0080);
+                this.setFlag("Z", ((this.reg["Y"].value - this.fetched) & 0x00FF) == 0x0000);
+                this.setFlag("C", this.fetched <  this.reg["Y"].value);
+                this.setFlag("N", (this.reg["Y"].value - this.fetched) & 0x0080);
 
                 extraCycles = 1;
                 break;
 
             case "DEC":
+                this.fetch();
+
+                res = this.fetched - 1;
+                this.write(this.addr_abs, res);
+
+                this.setFlag("Z", !(res & 0x00FF));
+                this.setFlag("N", res & 0x0080);
                 break;
-                
+
+            case "DEX":
+                this.reg["X"].value--;
+
+                this.setFlag("Z", !(this.reg["X"].value));
+                this.setFlag("N", this.reg["X"].value & 0x80);
+                break;
+
             case "DEY":
+                this.reg["Y"].value--;
+
+                this.setFlag("Z", !(this.reg["Y"].value));
+                this.setFlag("N", this.reg["Y"].value & 0x80);
                 break;
+
             case "EOR":
+                this.fetch();
+
+                this.reg["A"].value = this.reg["A"].value ^ this.fetched;
+
+                this.setFlag("Z", !(this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
+
                 break;
+
             case "INC":
+                this.fetch();
+
+                res = this.fetched + 1;
+                this.write(this.addr_abs, res);
+
+                this.setFlag("Z", !(res & 0x00FF));
+                this.setFlag("N", res & 0x0080);
                 break;
+
             case "INX":
+                this.reg["X"].value++;
+
+                this.setFlag("Z", !(this.reg["X"].value));
+                this.setFlag("N", this.reg["X"].value & 0x80);
                 break;
+
             case "INY":
+                this.reg["Y"].value++;
+
+                this.setFlag("Z", !(this.reg["Y"].value));
+                this.setFlag("N", this.reg["Y"].value & 0x80);
                 break;
+
             case "JMP":
+                this.pc = this.addr_abs;
                 break;
+
             case "JSR":
+                this.pc--;
+
+                this.write(this.ADDR_STACK_BASE + this.stkp, (pc >> 8) & 0x00FF);
+                this.stkp--;
+                this.write(this.ADDR_STACK_BASE + this.stkp, pc & 0x00FF);
+                this.stkp--;
+
+                this.pc = this.addr_abs;
                 break;
+
             case "LDA":
+                this.fetch();
+
+                this.reg["A"].value = this.fetched;
+
+                this.setFlag("Z", !(this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
+
+                extraCycles = 1;
                 break;
+
             case "LDX":
+                this.fetch();
+
+                this.reg["X"].value = this.fetched;
+
+                this.setFlag("Z", !(this.reg["X"].value));
+                this.setFlag("N", this.reg["X"].value & 0x80);
+
+                extraCycles = 1;
                 break;
+
             case "LDY":
+                this.fetch();
+
+                this.reg["Y"].value = this.fetched;
+
+                this.setFlag("Z", !(this.reg["Y"].value));
+                this.setFlag("N", this.reg["Y"].value & 0x80);
+
+                extraCycles = 1;
                 break;
+
             case "LSR":
+                this.fetch(); // If mode is IMP we'll get the accumulator
+                let shifted = this.fetched >> 1;
+
+                this.setFlag("C", this.fetched & 0x0001);
+                this.setFlag("Z", !(shifted & 0x00FF));
+                this.setFlag("N", shifted & 0x80);
+
+                if (this.op.mode == "IMP") this.reg["A"].value = shifted & 0x00FF;
+                else this.write(this.addr_abs, shifted & 0x00FF);
                 break;
 
             case "NOP":
@@ -465,25 +596,57 @@ class CPU_6502 extends CPU {
                 break;
 
             case "ORA":
+                this.fetch(); // Gets contents of whats at addr_abs
+                this.reg["A"].value = this.reg["A"].value | this.fetched;
+
+                this.setFlag("Z", !(this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
+
+                extraCycles = 1;
                 break;
+
             case "PHA":
+                this.write(ADDR_STACK_BASE + this.stkp, this.reg["A"].value);
+                this.stkp--;
                 break;
+
             case "PHP":
                 break;
+
             case "PLA":
+                this.stkp++;
+                this.reg["A"].value = this.read(ADDR_STACK_BASE + this.stkp);
+                this.setFlag("Z", !(this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
                 break;
+
             case "PLP":
                 break;
             case "ROL":
                 break;
-            case "ROL":
+            case "ROR":
                 break;
             case "RTI":
                 break;
             case "RTS":
                 break;
+
             case "SBC":
+                this.fetch();
+
+                val = fetch ^ 0x00FF;
+                res = this.reg["A"].value + val + this.getFlag("C");
+
+                this.setFlag("C", res > 255);
+                this.setFlag("Z", (res & 0x00FF) == 0);
+                this.setFlag("N", res & 0x80);
+
+                // For more information regarding overflow:
+                // https://youtu.be/8XmxKPJDGU0?t=2842
+                this.setFlag("V", ((this.reg["A"].value ^ res) & (res ^ val)) & 0x0080);
+                this.reg["A"].value = res & 0x00FF;
                 break;
+
             case "SEC":
                 this.setFlag("C", true);
                 break;
@@ -497,22 +660,54 @@ class CPU_6502 extends CPU {
                 break;
 
             case "STA":
+                this.write(this.addr_abs, this.reg["A"].value);
                 break;
+
             case "STX":
+                this.write(this.addr_abs, this.reg["X"].value);
                 break;
+
             case "STY":
+                this.write(this.addr_abs, this.reg["Y"].value);
                 break;
+
             case "TAX":
+                this.reg["X"].value = this.reg["A"].value;
+
+                this.setFlag("Z", (!this.reg["X"].value));
+                this.setFlag("N", this.reg["X"].value & 0x80);
                 break;
+
             case "TAY":
+                this.reg["Y"].value = this.reg["A"].value;
+
+                this.setFlag("Z", (!this.reg["Y"].value));
+                this.setFlag("N", this.reg["Y"].value & 0x80);
                 break;
+
             case "TSX":
+                this.reg["X"].value = this.stkp;
+
+                this.setFlag("Z", (!this.reg["X"].value));
+                this.setFlag("N", this.reg["X"].value & 0x80);
                 break;
+
             case "TXA":
+                this.reg["A"].value = this.reg["X"].value;
+
+                this.setFlag("Z", (!this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
                 break;
+
             case "TXS":
+                this.stkp = this.reg["X"].value;
                 break;
+
             case "TYA":
+                this.reg["A"].value = this.reg["Y"].value;
+
+                this.setFlag("Z", (!this.reg["A"].value));
+                this.setFlag("N", this.reg["A"].value & 0x80);
                 break;
         }
 
@@ -542,8 +737,7 @@ class CPU_6502 extends CPU {
             let op = CPU_6502_OPCODES.find(opcode => opcode.code == this.read(addr));
             if (op == undefined) { addr++; continue; }
 
-            if (prettify) disasm += "<span class=hex-value-index>$" + Utils.padNumber((addr + 0xf000).toString(16), 4) + "</span>: ";
-            else disasm += "$" + Utils.padNumber((addr + 0xf000).toString(16), 4) + ": ";
+            if (prettify) disasm += "<span class=hex-value-index>$" + Utils.padNumber((addr).toString(16), 4) + "</span>: ";
 
             if (prettify) disasm += "<span class=instruction>" + op.name + "</span>";
             else disasm += op.name + " ";
@@ -564,14 +758,14 @@ class CPU_6502 extends CPU {
                 case "IMM":
                     if (prettify) disasm += " <span class=hex-value-implied>";
                     disasm += " #$" + Utils.padNumber(lo, 2);
-                    if (prettify) disasm += "</span>";
+                    if (prettify) disasm += " </span>";
 
                     break;
 
                 case "ZP0":
                     if (prettify) disasm += " <span class=hex-value>";
                     disasm += " $" + Utils.padNumber(lo, 2);
-                    if (prettify) disasm += "</span>";
+                    if (prettify) disasm += " </span>";
                     break;
 
                 case "IZX":
@@ -595,7 +789,7 @@ class CPU_6502 extends CPU {
                     hi = this.read(addr).toString(16); addr++;
                     if (prettify) disasm += " <span class=hex-value>";
                     disasm += " $" + Utils.padNumber((hi + lo), 4);
-                    if (prettify) disasm += "</span>";
+                    if (prettify) disasm += " </span>";
 
                     break;
 
@@ -612,7 +806,7 @@ class CPU_6502 extends CPU {
                     hi = this.read(addr).toString(16); addr++;
                     if (prettify) disasm += " <span class=hex-value>";
                     disasm += " $" + Utils.padNumber((hi + lo), 4);
-                    if (prettify) disasm += "</span>, <span class=register>X</span>";
+                    if (prettify) disasm += "</span>, <span class=register>Y</span>";
                     else disasm += ", X";
 
                     break;

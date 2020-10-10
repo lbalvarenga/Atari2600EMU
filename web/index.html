@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atari2600EMU</title>
+    <title>Atari 2600 Emulator</title>
 
     <link rel="shortcut icon" href="meta/favicon.png" type="image/x-icon">
 </head>
@@ -42,6 +42,14 @@
             color: #6affdf;
         }
 
+        .on {
+            color: green;
+        }
+
+        .off {
+            color: red;
+        }
+
         #disasm-container {
             overflow-y: scroll;
             max-height: 60vh;
@@ -50,12 +58,15 @@
 
     <div style="margin: 15px; padding-bottom: 25px;">
         <span style="float: left; margin: 10px;"><img src="./meta/favicon.png" width=64 height=64></span>
-        <h1>Atari2600EMU</h1>
+        <h1>Atari 2600 Emulator</h1>
     </div>
 
-    <div id="disasm-container">
-        <p id="disasm-out"></p>
+    <h4>Flags:</h4>
+    <div id="cpu-status">
     </div>
+
+    <h4>Disassembly:</h4>
+    <div id="disasm-out"></div>
 
     <script type="module" src="main.js"></script>
 </body>
