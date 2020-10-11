@@ -1,13 +1,16 @@
 import { Bus } from "../emu/Bus.js";
 import { Utils } from "../utils/Utils.js"
 
+// THis is somewhat janky, but since it's temporary, I'm fine
+// with it.
+
 let atari2600 = new Bus(1.19);
 let cpuinfo = atari2600.cpu.getInfo();
 let domP = document.getElementById("disasm-out");
 
 
-loadBinary("../roms/test00.bin").then(() => {
-    let disasm = atari2600.cpu.disassemble(0x0000, 0x0010, true);
+loadBinary("../roms/test00.bin").then((binSize) => {
+    let disasm = atari2600.cpu.disassemble(0x0000, binSize/2, true);
     domP.innerHTML = disasm;
 
     atari2600.cpu.reset();
@@ -15,39 +18,51 @@ loadBinary("../roms/test00.bin").then(() => {
         atari2600.cpu.clock();
     }
 
-    let i = 0;
-    let log = "<style>body{font-family:monospace;font-size:1.4em;background-color:black;color:white;}</style>";
+    let pcAddrHtml = "";
+    let ins = 0;
+    $(document).on("keypress", e => {
+        loop();
+        ins++;
+    })
 
-    log += "Code execution for 20 instructions: <br><br>"
-    while (i < 20) {
+    function loop() {
+        $(pcAddrHtml).removeClass("current-instruction");
         let pc = Utils.padNumber((atari2600.cpu.pc).toString(16), 4);
+
         let flags = atari2600.cpu.flags;
         let flagList = "";
         for (const flagName in flags) {
             let flag = flags[flagName];
             if (flag) {
-                flagList += flag.char + ": " + (flag.value ? "1" : "0") + "; ";
+                flagList += "<span class=\"" + (flag.value ? "on" : "off") + "\">" + flag.char + "</span> ";
             }
         }
 
+        let registers = "";
+        for (const regName in atari2600.cpu.reg) {
+            let reg = atari2600.cpu.reg[regName];
+            if (reg) {
+                let regVal = Utils.padNumber(Utils.toUnsigned(reg.value, 8).toString(16), 2);
+                registers += reg.char + ": &nbsp;$" + regVal + " (" + reg.value + ")<br>";
+            }
+        }
+        $("#cpu-status").html(registers + "PC: $" + pc + "<br>" + flagList);
+
         atari2600.cpu.clock();
 
-
-        log += ("INSTRUCTION: " + i) + "<br>";
-        log += ("PC = 0x" + pc) + "<br>";
-        log += ("OP = " + atari2600.cpu.op.name) + "<br>";
-        log += (flagList) + "<br><br>";
+        pcAddrHtml = "#S" + pc;
+        $(pcAddrHtml).addClass("current-instruction");
 
         while (atari2600.cpu.cycles) {
             atari2600.cpu.clock();
         }
-
-        i++;
     }
-
-    saveExecLog(log);
     // ISSUE WITH RELATIVE ADDR CALCULATION
 
+    // should improve this
+    $("html").mousedown(() => {
+        $("#disasm-out span").removeClass("highlight");
+    });
 });
 
 function saveExecLog(log) {
@@ -58,4 +73,5 @@ function saveExecLog(log) {
 async function loadBinary(filename) {
     let rom = await (await fetch(filename)).arrayBuffer();
     atari2600.ram = new Uint8Array(rom);
+    return rom.byteLength;
 }

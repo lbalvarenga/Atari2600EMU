@@ -161,6 +161,9 @@ class CPU_6502 extends CPU {
         else {
             this.reg["status"].value &= ~(1 << flag.key);
         }
+
+        // Cast to 8 bits
+        this.reg["status"].value &= 0x00FF;
     }
 
     // TODO: implement IZX and IZY
@@ -378,7 +381,6 @@ class CPU_6502 extends CPU {
 
                     this.pc = this.addr_abs & 0x00FF;
                 }
-                debugger;
                 break;
 
             case "BPL":
@@ -537,9 +539,9 @@ class CPU_6502 extends CPU {
             case "JSR":
                 this.pc--;
 
-                this.write(this.ADDR_STACK_BASE + this.stkp, (pc >> 8) & 0x00FF);
+                this.write(this.ADDR_STACK_BASE + this.stkp, (this.pc >> 8) & 0x00FF);
                 this.stkp--;
-                this.write(this.ADDR_STACK_BASE + this.stkp, pc & 0x00FF);
+                this.write(this.ADDR_STACK_BASE + this.stkp, this.pc & 0x00FF);
                 this.stkp--;
 
                 this.pc = this.addr_abs;
@@ -731,13 +733,16 @@ class CPU_6502 extends CPU {
         let lo = 0x00;
         let hi = 0x00;
 
-        // TODO: with prettify enabled, have relative addresses link to index (i know what i mean)
+        // TODO: catch toString of undefined exception (reading past code size)
         // TODO: implement "IND" prettifying
         while (addr <= stop) {
+            let addrString = Utils.padNumber((addr).toString(16), 4);
+            if (prettify) disasm += "<span id=\"S" + addrString + "\">"
+
             let op = CPU_6502_OPCODES.find(opcode => opcode.code == this.read(addr));
             if (op == undefined) { addr++; continue; }
 
-            if (prettify) disasm += "<span class=hex-value-index>$" + Utils.padNumber((addr).toString(16), 4) + "</span>: ";
+            if (prettify) disasm += "<span class=hex-value-index>$" + addrString + "</span>: ";
 
             if (prettify) disasm += "<span class=instruction>" + op.name + "</span>";
             else disasm += op.name + " ";
@@ -817,7 +822,9 @@ class CPU_6502 extends CPU {
                     break;
 
                 case "REL":
-                    if (prettify) disasm += " <span class=hex-value-relative>[$" + Utils.padNumber((addr + Utils.toSigned(parseInt(lo, 16), 8)).toString(16), 4) + "]</span>";
+                    let reladdr = Utils.padNumber((addr + Utils.toSigned(parseInt(lo, 16), 8)).toString(16), 4);
+                    let anchor = " <a href=# onclick=\"document.getElementById('S" + reladdr + "').classList.add('highlight');\">";
+                    if (prettify) disasm += anchor + "<span class=hex-value-relative>[$" + reladdr + "]</span></a>";
                     else disasm += " [$" + Utils.padNumber((addr + Utils.toSigned(parseInt(lo, 16), 8)).toString(16), 4) + "]";
                     break;
             }
@@ -825,7 +832,7 @@ class CPU_6502 extends CPU {
                 disasm += " (ILLEGAL)";
             }
 
-            disasm += "<br>";
+            disasm += "</span><br>";
         }
 
         return disasm;

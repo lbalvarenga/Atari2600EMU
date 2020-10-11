@@ -15,6 +15,10 @@ class Utils {
 
         return number;
     }
+
+    static toUnsigned(number, width) {
+        return number & (Math.pow(2, width))-1;
+    }
 }
 
 export { Utils };
