@@ -241,16 +241,20 @@ class CPU_6502 extends CPU {
                 break;
 
             case "IZX":
+                throw new Error("Not implemented.");
                 break;
             case "IZY":
+                throw new Error("Not implemented.")
                 break;
 
             case "REL":
                 this.addr_rel = this.read(this.pc); this.pc++;
 
+                // addr_rel = (addr + Utils.toSigned(parseInt(lo, 16), 8));
+
                 // Make addr_rel signed (not working)
                 if (this.addr_rel & 0x80) {
-                    // this.addr_rel |= 0xFF00;
+                    this.addr_rel = Utils.toSigned(this.addr_rel, 8);
                 }
                 break;
 
@@ -348,7 +352,7 @@ class CPU_6502 extends CPU {
 
             case "BIT":
                 this.fetch();
-                let res = this.reg["A"].value & this.fetched;
+                res = this.reg["A"].value & this.fetched;
                 this.setFlag("Z", !(res & 0x00FF));
                 this.setFlag("V", res & (1 << 7));
                 this.setFlag("N", res & (1 << 6));
@@ -379,7 +383,7 @@ class CPU_6502 extends CPU {
                         this.cycles++;
                     }
 
-                    this.pc = this.addr_abs & 0x00FF;
+                    this.pc = this.addr_abs;
                 }
                 break;
 
@@ -761,7 +765,7 @@ class CPU_6502 extends CPU {
                     break;
 
                 case "IMM":
-                    if (prettify) disasm += " <span class=hex-value-implied>";
+                    if (prettify) disasm += " <span class=hex-value-immediate>";
                     disasm += " #$" + Utils.padNumber(lo, 2);
                     if (prettify) disasm += " </span>";
 
@@ -793,7 +797,7 @@ class CPU_6502 extends CPU {
                 case "ABS":
                     hi = this.read(addr).toString(16); addr++;
                     if (prettify) disasm += " <span class=hex-value>";
-                    disasm += " $" + Utils.padNumber((hi + lo), 4);
+                    disasm += " $" + Utils.padNumber(hi, 2) + Utils.padNumber(lo, 2);
                     if (prettify) disasm += " </span>";
 
                     break;
@@ -801,7 +805,7 @@ class CPU_6502 extends CPU {
                 case "ABX":
                     hi = this.read(addr).toString(16); addr++;
                     if (prettify) disasm += " <span class=hex-value>";
-                    disasm += " $" + Utils.padNumber((hi + lo), 4);
+                    disasm += " $" + Utils.padNumber(hi, 2) + Utils.padNumber(lo, 2);
                     if (prettify) disasm += "</span>, <span class=register>X</span>";
                     else disasm += ", X";
 
@@ -810,7 +814,7 @@ class CPU_6502 extends CPU {
                 case "ABY":
                     hi = this.read(addr).toString(16); addr++;
                     if (prettify) disasm += " <span class=hex-value>";
-                    disasm += " $" + Utils.padNumber((hi + lo), 4);
+                    disasm += " $" + Utils.padNumber(hi, 2) + Utils.padNumber(lo, 2);
                     if (prettify) disasm += "</span>, <span class=register>Y</span>";
                     else disasm += ", X";
 
@@ -818,7 +822,7 @@ class CPU_6502 extends CPU {
 
                 case "IND":
                     hi = this.read(addr).toString(16); addr++;
-                    disasm += " ($" + Utils.padNumber((hi + lo), 4) + ")";
+                    disasm += " ($" + Utils.padNumber(hi, 2) + Utils.padNumber(lo, 2); + ")";
                     break;
 
                 case "REL":

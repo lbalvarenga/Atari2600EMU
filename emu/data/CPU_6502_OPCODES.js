@@ -972,7 +972,7 @@ const CPU_6502_OPCODES = [
     },
     {
         code: 0x88,
-        name: "DEI",
+        name: "DEY",
         mode: "IMP",
         cycles: 2,
         legal: true
